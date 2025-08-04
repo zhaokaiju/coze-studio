@@ -36,23 +36,25 @@ jobs:
         with:
           go-version: ${{ env.DEFAULT_GO_VERSION }}
 
+      # - name: Shutdown Ubuntu MySQL
+      #   run: service mysql stop
+
       - name: Set Up MySQL
         uses: mirromutth/mysql-action@v1.1
         with:
           host port: 3306
           container port: 3306
           character set server: 'utf8mb4'
-          collation server: 'utf8_general_ci'
-          mysql version: '8.0'
+          collation server: 'utf8mb4_general_ci'
+          mysql version: '8.4.5'
           mysql database: 'opencoze'
           mysql root password: 'root'
-          mysql container name: 'mysql-server'
           
-      - name: Verify MySQL startup
+      - name: Verify MySQL Startup
         run: |
           echo "Waiting for MySQL to be ready..."
-          for i in {1..600}; do
-            if nc -z 127.0.0.1 3306; then
+          for i in {1..60}; do
+            if cat /proc/net/tcp | grep 0CEA; then
               echo "MySQL port 3306 is listening!"
               break
             fi
@@ -60,12 +62,12 @@ jobs:
             sleep 1
           done
           echo "Final verification: MySQL port 3306 is accessible"
-          
-      - uses: ariga/setup-atlas@v0
-      - uses: ariga/atlas-action/migrate/apply@v1
-        with:
-          url: 'mysql://root:root@localhost:3306/opencoze?charset=utf8mb4&parseTime=True'
-          dir: 'file://docker/atlas/migrations' 
+
+      - name: Install MySQL Client
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+
+      - name: Initialize Database
+        run: mysql -h 127.0.0.1 -P 3306 -u root -proot opencoze < docker/volumes/mysql/schema.sql
                     
       - name: Run Go Test
         run: |
@@ -98,7 +100,7 @@ jobs:
         id: coverage
         uses: vladopajic/go-test-coverage@v2
         with:
-          config: ./.testcoverage.yml
+          config: .github/.testcoverage.yml
           profile: ${{ env.COVERAGE_FILE}}
           breakdown-file-name: ${{ github.ref_name == 'main' && env.BREAKDOWN_FILE || '' }}
           diff-base-breakdown-file-name: ${{ env.BREAKDOWN_FILE }}
